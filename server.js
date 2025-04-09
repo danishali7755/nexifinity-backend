@@ -1,15 +1,13 @@
-
-import express from 'express';
-import axios from 'axios';
-import cheerio from 'cheerio';
-import cors from 'cors';
+const express = require('express');
+const axios = require('axios');
+const cheerio = require('cheerio');
+const cors = require('cors');
 
 const app = express();
 app.use(cors());
 
 const extractChannelId = (url) => {
-  const regex = /(?:channel\/|user\/|c\/|@)?([\w-]{1,})$/;
-  const match = url.match(regex);
+  const match = url.match(/(?:https?:\/\/)?(?:www\.)?youtube\.com\/(?:@|channel\/|c\/|user\/)?([\w-]+)/);
   return match ? match[1] : null;
 };
 
@@ -27,16 +25,18 @@ app.get('/api/check', async (req, res) => {
   if (!channelId) return res.status(400).json({ error: 'Invalid URL format' });
 
   try {
-    const html = await axios.get(\`https://www.youtube.com/\${channelId.startsWith('UC') ? 'channel' : 'c'}/\${channelId}\`);
+    const fullUrl = url.includes('@')
+      ? `https://www.youtube.com/@${channelId}`
+      : `https://www.youtube.com/${channelId.startsWith('UC') ? 'channel' : 'c'}/${channelId}`;
+
+    const html = await axios.get(fullUrl);
     const $ = cheerio.load(html.data);
 
     const title = $('meta[name="title"]').attr('content') || 'Unknown';
     const region = $('meta[itemprop="addressCountry"]').attr('content') || 'Unknown';
     const keywords = $('meta[name="keywords"]').attr('content') || 'N/A';
-
     const viewText = $('meta[itemprop="interactionCount"]').attr('content') || '0';
     const totalViews = parseInt(viewText);
-
     const monetized = html.data.includes('google_ads_iframe');
     const earnings = estimateCPM(totalViews);
 
@@ -55,4 +55,4 @@ app.get('/api/check', async (req, res) => {
 });
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`API running on http://localhost:\${PORT}`));
+app.listen(PORT, () => console.log(`API running on port ${PORT}`));
